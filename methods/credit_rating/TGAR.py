@@ -6,17 +6,24 @@ from tqdm import tqdm
 
  
 class Model():
-    def __init__(self, model, args, device):
+    def __init__(self, model, args, device, class_weight=None):
         self.device = device
         self.args = args
         self.model = model.to(device)
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-2, weight_decay=5e-4)
+        # store weights on the correct device
+        self.class_weight = None if class_weight is None else class_weight.to(device)
+        self.optimizer = torch.optim.Adam(
+            self.model.parameters(), lr=args.lr, weight_decay=5e-4
+        )
 
     def fit(self, batch):
         self.optimizer.zero_grad()
-        out = self.model(batch)
-        loss = F.nll_loss(out[:batch.batch_size], batch.y[:batch.batch_size])
-        # loss.requires_grad = True
+        out = self.model(batch)  # IMPORTANT: nets return log-probs (log_softmax)
+        loss = F.nll_loss(
+            out[:batch.batch_size],
+            batch.y[:batch.batch_size],
+            weight=self.class_weight  # <-- weighted loss here
+        )
         loss.backward()
         self.optimizer.step()
 
@@ -26,9 +33,7 @@ class Model():
         predb = out.cpu().max(dim=1).indices[:testbatch.batch_size]
         trub = torch.Tensor.cpu(testbatch.y)[:testbatch.batch_size]
         self.model.train()
-
         return trub, predb
-
 
 class TGAR(torch.nn.Module):
     def __init__(self, batch_size, num_feature, num_label, hiddim, droprate,hidlayers,p, hyper_k):
@@ -77,21 +82,17 @@ class TGAR(torch.nn.Module):
         # todo: output layer
         self.fcs.append(nn.Linear(self.hiddim, self.num_label)) 
 
-    def forward(self, data):
-        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-        x, edge_index = data.x, data.edge_index     
-
-        x = x.view(-1, x.size(-1))  # batch_size * num_feature(4)
-
+    def encode(self, x, edge_index):
+        x = x.view(-1, x.size(-1))
         K = self.contextAttentionLayer(x, edge_index, 0)
         K = self.fcsK(K)
         K = self.contextAttentionLayer(K, edge_index, 1)
+        return K  # [N, hiddim]
 
-        output = self.fcs[-1](K)
-
-        output = F.log_softmax(output, dim=1)
-
-        return output
+    def forward(self, data):
+        K = self.encode(data.x, data.edge_index)     # <- reuse encode
+        logits = self.fcs[-1](K)
+        return F.log_softmax(logits, dim=1)
     
 
     # differential aggregation operator
@@ -168,3 +169,4 @@ class TGAR(torch.nn.Module):
         Y = leaky_relu(Y)
 
         return Y
+
