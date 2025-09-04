@@ -80,8 +80,12 @@ class TGAR(torch.nn.Module):
         self.fcs.append(nn.Linear(self.hiddim * 3, 1))
 
         # todo: output layer
-        self.fcs.append(nn.Linear(self.hiddim, self.num_label)) 
-
+        self.head = nn.Sequential(
+            nn.Linear(self.hiddim, self.hiddim // 2),
+            nn.ReLU(),
+            nn.Dropout(p=droprate),
+            nn.Linear(self.hiddim // 2, self.num_label),
+        )
     def encode(self, x, edge_index):
         x = x.view(-1, x.size(-1))
         K = self.contextAttentionLayer(x, edge_index, 0)
@@ -90,10 +94,9 @@ class TGAR(torch.nn.Module):
         return K  # [N, hiddim]
 
     def forward(self, data):
-        K = self.encode(data.x, data.edge_index)     # <- reuse encode
-        logits = self.fcs[-1](K)
-        return F.log_softmax(logits, dim=1)
-    
+      K = self.encode(data.x, data.edge_index)     # [N, hiddim]
+      logits = self.head(K)                         # use the MLP head
+      return F.log_softmax(logits, dim=1)
 
     # differential aggregation operator
     def diffAggr(self, X1, X2):
@@ -169,4 +172,3 @@ class TGAR(torch.nn.Module):
         Y = leaky_relu(Y)
 
         return Y
-
