@@ -40,96 +40,99 @@ def load_data(year,Q,attack_rate=0):
 
     features = []
     labels = []
+    dead_mask = []          # <-- NEW: will become a bool mask over nodes
+    n1 = 0                  # number of nodes in first quarter (content1)
 
-    with open(content1,"r") as f:
-        nodes = f.readlines()
-        j=0
-        for node in nodes:
-            node=node.strip('\n')
-            if j==0:
-                j=1
-                continue
-            node_info = node.split(',')    
-            index_dict[node_info[0]] = len(index_dict)
-            if len(node_info)>72:
-                features.append([float(i) for i in node_info[1:-3]])
-            else:
-                features.append([float(i) for i in node_info[1:-1]])
-            
-            # print("check node info")
-            if len(node_info)>72:
+    with open(content1, "r") as f:
+        lines = f.readlines()
+        header = lines[0].strip().split(',')
+        # robustly locate Equity and label column
+        # Equity name may vary in case/spaces; adjust if your header differs
+        eq_idx = next(i for i, h in enumerate(header) if h.strip().lower() == "equity")
+        # your label can be last or third from last; keep your logic:
+        for j, node in enumerate(lines[1:]):
+            node_info = node.strip('\n').split(',')
+            node_id = node_info[0]
+            index_dict[node_id] = len(index_dict)
+
+            # features (same as yours)
+            if len(node_info) > 72:
+                feats = [float(i) for i in node_info[1:-3]]
                 label_str = node_info[-3]
             else:
+                feats = [float(i) for i in node_info[1:-1]]
                 label_str = node_info[-1]
-            if(label_str not in label_to_index.keys()):
+            features.append(feats)
+
+            # dead if Equity < 0
+            eq_val = float(node_info[eq_idx])
+            dead_mask.append(eq_val < 0.0)
+
+            if label_str not in label_to_index:
                 label_to_index[label_str] = len(label_to_index)
             labels.append(label_to_index[label_str])
 
+    n1 = len(index_dict)              # <-- dynamic offset
+    # ---------- content2 ----------
+    with open(content2, "r") as f:
+        lines = f.readlines()
+        header2 = lines[0].strip().split(',')
+        eq_idx2 = next(i for i, h in enumerate(header2) if h.strip().lower() == "equity")
+        for node in lines[1:]:
+            node_info = node.strip('\n').split(',')
+            node_id = str(int(node_info[0]) + n1)   # <-- offset by n1 instead of 24271
+            index_dict[node_id] = len(index_dict)
 
-    with open(content2,"r") as f:
-        nodes = f.readlines()
-        j=0
-        for node in nodes:
-            node=node.strip('\n')
-            if j==0:
-                j=1
-                continue
-            node_info = node.split(',')    
-            index_dict[str(int(node_info[0])+24271)] = len(index_dict)
-            # features.append([float(i) for i in node_info[1:-1]])
-            if len(node_info)>72:
-                features.append([float(i) for i in node_info[1:-3]])
-            else:
-                features.append([float(i) for i in node_info[1:-1]])
-
-            # label_str = node_info[-1]
-            if len(node_info)>72:
+            if len(node_info) > 72:
+                feats = [float(i) for i in node_info[1:-3]]
                 label_str = node_info[-3]
             else:
+                feats = [float(i) for i in node_info[1:-1]]
                 label_str = node_info[-1]
-            if(label_str not in label_to_index.keys()):
+            features.append(feats)
+
+            eq_val = float(node_info[eq_idx2])
+            dead_mask.append(eq_val < 0.0)
+
+            if label_str not in label_to_index:
                 label_to_index[label_str] = len(label_to_index)
             labels.append(label_to_index[label_str])
 
+    # ---------- edges (drop any incident to dead nodes) ----------
     edge_index = []
+    dead_arr = np.array(dead_mask, dtype=bool)
 
-    with open(cites1,"r") as f:
-        edges = f.readlines()
-        j=0
-        for edge in edges:
-            if j==0:
-                j=1
-                continue
-            edge=edge.strip('\n')
-            if attack_rate!=0:
-                start, end = edge.split(',')
-            else:
-                start, end,_ = edge.split(',')
-            if start in index_dict and end in index_dict :
-                edge_index.append([index_dict[start],index_dict[end]])
-                edge_index.append([index_dict[end],index_dict[start]])  
-    
+    def _add_edges(path, offset=0, has_weight=True):
+        with open(path, "r") as f:
+            lines = f.readlines()
+            for k, line in enumerate(lines[1:]):
+                parts = line.strip('\n').split(',')
+                if attack_rate != 0 or not has_weight:
+                    start, end = parts[0], parts[1]
+                else:
+                    start, end = parts[0], parts[1]  # weight ignored here
+                sid = str(int(start) + offset)
+                tid = str(int(end) + offset)
+                if sid in index_dict and tid in index_dict:
+                    s = index_dict[sid]
+                    t = index_dict[tid]
+                    # skip if either endpoint is dead
+                    if dead_arr[s] or dead_arr[t]:
+                        continue
+                    edge_index.append([s, t])
+                    edge_index.append([t, s])
 
-    with open(cites2,"r") as f:
-        edges = f.readlines()
-        j=0
-        for edge in edges:
-            if j==0:
-                j=1
-                continue
-            edge=edge.strip('\n')
-            start, end, weight = edge.split(',')
-            start=str(int(start)+24271)
-            end=str(int(end)+24271)  
-            if start in index_dict and end in index_dict :
-                edge_index.append([index_dict[start],index_dict[end]])
-                edge_index.append([index_dict[end],index_dict[start]]) 
-    
-    labels = torch.LongTensor(labels)
+    # edges for content1 (offset 0)
+    _add_edges(cites1, offset=0, has_weight=(attack_rate == 0))
+    # edges for content2 (offset n1)
+    _add_edges(cites2, offset=n1, has_weight=True)
+
+    labels   = torch.LongTensor(labels)
     features = torch.FloatTensor(features)
-    edge_index =  torch.LongTensor(edge_index)
-    return label_to_index,labels,features,edge_index
+    edge_index = torch.LongTensor(edge_index)
+    dead_mask = torch.tensor(dead_arr, dtype=torch.bool)     # <-- NEW
 
+    return label_to_index, labels, features, edge_index, dead_mask
 
 def preprocess():
     seed = 1234
