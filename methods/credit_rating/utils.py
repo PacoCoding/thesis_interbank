@@ -40,6 +40,7 @@ def load_data(year,Q,attack_rate=0):
 
     features = []
     labels = []
+    weights = []
     dead_mask = []          # <-- NEW: will become a bool mask over nodes
     n1 = 0                  # number of nodes in first quarter (content1)
 
@@ -103,25 +104,28 @@ def load_data(year,Q,attack_rate=0):
     dead_arr = np.array(dead_mask, dtype=bool)
 
     def _add_edges(path, offset=0, has_weight=True):
-        with open(path, "r") as f:
-            lines = f.readlines()
-            for k, line in enumerate(lines[1:]):
-                parts = line.strip('\n').split(',')
-                if attack_rate != 0 or not has_weight:
-                    start, end = parts[0], parts[1]
-                else:
-                    start, end = parts[0], parts[1]  # weight ignored here
-                sid = str(int(start) + offset)
-                tid = str(int(end) + offset)
-                if sid in index_dict and tid in index_dict:
-                    s = index_dict[sid]
-                    t = index_dict[tid]
-                    # skip if either endpoint is dead
-                    if dead_arr[s] or dead_arr[t]:
-                        continue
-                    edge_index.append([s, t])
-                    edge_index.append([t, s])
+      with open(path, "r") as f:
+          lines = f.readlines()
+          for k, line in enumerate(lines[1:]):
+              parts = line.strip('\n').split(',')
+              # read endpoints (+ optional weight in col 3)
+              if has_weight:
+                  start, end = parts[0], parts[1]
+                  w = float(parts[2]) if len(parts) >= 3 else 1.0
+              else:
+                  start, end = parts[0], parts[1]
+                  w = 1.0
 
+              sid = str(int(start) + offset)
+              tid = str(int(end) + offset)
+              if sid in index_dict and tid in index_dict:
+                  s = index_dict[sid]; t = index_dict[tid]
+                  # skip edges if either endpoint is dead
+                  if dead_arr[s] or dead_arr[t]:
+                      continue
+                  # undirected: add both ways, keep same weight
+                  edge_index.append([s, t]); weights.append(w)
+                  edge_index.append([t, s]); weights.append(w)
     # edges for content1 (offset 0)
     _add_edges(cites1, offset=0, has_weight=(attack_rate == 0))
     # edges for content2 (offset n1)
@@ -130,9 +134,10 @@ def load_data(year,Q,attack_rate=0):
     labels   = torch.LongTensor(labels)
     features = torch.FloatTensor(features)
     edge_index = torch.LongTensor(edge_index)
+    edge_weight = torch.tensor(weights, dtype=torch.float)
     dead_mask = torch.tensor(dead_arr, dtype=torch.bool)     # <-- NEW
-
-    return label_to_index, labels, features, edge_index, dead_mask
+    edge_weight = torch.clamp(edge_weight, min=0.0)
+    return label_to_index, labels, features, edge_index, dead_mask,edge_weight 
 
 def preprocess():
     seed = 1234
