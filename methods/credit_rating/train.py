@@ -70,7 +70,7 @@ def _slug(s: str) -> str:
 # ──────────────────────────────────────────────────────────────────────────────
 # Data (single quarter file that contains [older | newer] halves)
 # ──────────────────────────────────────────────────────────────────────────────
-label_to_index, labels, features, edge_index, dead_mask = load_data(args.year, args.quarter)
+label_to_index, labels, features, edge_index, dead_mask, edge_weight = load_data(args.year, args.quarter)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Halves: first = older (train pool), second = newer (test)
@@ -95,16 +95,19 @@ test_mask  = torch.zeros(N, dtype=torch.bool); test_mask[torch.from_numpy(test_i
 
 # Safe scaling (fit on TRAIN nodes only)
 X_np = features.numpy() if isinstance(features, torch.Tensor) else features
-fit_idx = train_idx[~dead_mask[train_idx].numpy()]   
+fit_idx = train_idx[~dead_mask[train_idx].numpy()]
 scaler = MinMaxScaler()
-scaler.fit(X_np[train_idx])
+scaler.fit(X_np[fit_idx])                      # << use fit_idx (alive in train)
 X_norm = torch.from_numpy(scaler.transform(X_np)).float()
+edge_weight = torch.clamp(edge_weight, min=0.0) 
+edge_attr = edge_weight.view(-1, 1)
 
 data = Data(
     x=X_norm,
     edge_index=edge_index.t().contiguous(),
+    edge_attr=edge_attr,   # << add weights, clip
     y=labels,
-    dead=dead_mask 
+    dead=dead_mask
 ).to(device)
 print("Total nodes:", data.num_nodes)
 print("Dead nodes (all):", int(data.dead.sum()))
