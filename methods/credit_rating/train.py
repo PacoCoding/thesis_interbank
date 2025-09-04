@@ -26,7 +26,7 @@ from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 parser = argparse.ArgumentParser()
 parser.add_argument('--lr', type=float, default=0.01, help='Initial learning rate.')
 parser.add_argument('--hiddim', type=int, default=256, help='Hidden units.')
-parser.add_argument('--droprate', type=float, default=0.5, help='Dropout rate.')
+parser.add_argument('--droprate', type=float, default=0.3, help='Dropout rate.')
 parser.add_argument('--year', type=int, default=2020)
 parser.add_argument('--runs', type=int, default=2, help='How many independent runs (different seeds).')
 parser.add_argument('--base_seed', type=int, default=42, help='Base seed; each run adds +i.')
@@ -70,7 +70,7 @@ def _slug(s: str) -> str:
 # ──────────────────────────────────────────────────────────────────────────────
 # Data (single quarter file that contains [older | newer] halves)
 # ──────────────────────────────────────────────────────────────────────────────
-label_to_index, labels, features, edge_index = load_data(args.year, args.quarter)
+label_to_index, labels, features, edge_index, dead_mask = load_data(args.year, args.quarter)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Halves: first = older (train pool), second = newer (test)
@@ -95,6 +95,7 @@ test_mask  = torch.zeros(N, dtype=torch.bool); test_mask[torch.from_numpy(test_i
 
 # Safe scaling (fit on TRAIN nodes only)
 X_np = features.numpy() if isinstance(features, torch.Tensor) else features
+fit_idx = train_idx[~dead_mask[train_idx].numpy()]   
 scaler = MinMaxScaler()
 scaler.fit(X_np[train_idx])
 X_norm = torch.from_numpy(scaler.transform(X_np)).float()
@@ -102,11 +103,18 @@ X_norm = torch.from_numpy(scaler.transform(X_np)).float()
 data = Data(
     x=X_norm,
     edge_index=edge_index.t().contiguous(),
-    y=labels
+    y=labels,
+    dead=dead_mask 
 ).to(device)
-
+print("Total nodes:", data.num_nodes)
+print("Dead nodes (all):", int(data.dead.sum()))
+print("Dead in TRAIN:", int(data.dead[train_mask].sum()))
+print("Dead in VAL:",   int(data.dead[val_mask].sum()))
+print("Dead in TEST:",  int(data.dead[test_mask].sum()))
 # Sanity: no train↔test edges
 src, dst = data.edge_index
+touch_dead = (data.dead[src] | data.dead[dst]).sum().item()
+print("Edges incident to dead (should be 0):", touch_dead)
 cross = (train_mask[src] & test_mask[dst]) | (test_mask[src] & train_mask[dst])
 print("cross-split edges:", int(cross.sum().item()))  # expect 0
 
@@ -138,14 +146,31 @@ class WeightedModel(Model):
 
     def fit(self, batch):
         self.optimizer.zero_grad()
-        out = self.model(batch)  # log-probs [B,C]
-        loss = F.nll_loss(
-            out[:batch.batch_size],
-            batch.y[:batch.batch_size],
-            weight=self.class_weight
-        )
+        out = self.model(batch)  # log-probs [num_nodes_in_subgraph, C]
+        logits = out[:batch.batch_size]
+        y      = batch.y[:batch.batch_size]
+        # drop dead seeds
+        if hasattr(batch, 'dead'):
+            keep = ~batch.dead[:batch.batch_size]
+            logits = logits[keep]
+            y      = y[keep]
+        if logits.numel() == 0:         # all were dead → skip step
+            return
+        loss = F.nll_loss(logits, y, weight=self.class_weight)
         loss.backward()
         self.optimizer.step()
+
+    def test(self, batch):
+        self.model.eval()
+        out = self.model(batch)
+        pred = out.cpu().max(dim=1).indices[:batch.batch_size]
+        tru  = batch.y.cpu()[:batch.batch_size]
+        if hasattr(batch, 'dead'):
+            m = ~batch.dead[:batch.batch_size].cpu()
+            pred = pred[m]
+            tru  = tru[m]
+        self.model.train()
+        return tru, pred
 
 # Net
 if args.net == "GCN":
