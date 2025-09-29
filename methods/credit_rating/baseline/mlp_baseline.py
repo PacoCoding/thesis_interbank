@@ -1,3 +1,37 @@
+import os, glob, shutil
+import numpy as np
+import pandas as pd
+import torch
+import torch.nn as nn
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import FunctionTransformer, RobustScaler
+from sklearn.utils.class_weight import compute_class_weight
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, classification_report, confusion_matrix, ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
+from methods.credit_rating.utils.data_utils import (
+    TARGET, _set_seed, _clean_id,
+    enrich_nodes, make_feature_cols, make_preprocessor,
+    build_dead_masks_up_to, build_label_for_next
+)
+ROOT = Path(__file__).resolve().parents[3]     # repo root
+DATASETS = ROOT / "datasets"
+
+# use repo-relative patterns (nodes/ and edges/ directories)
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+TARGET = "rank_next_quarter"
+NODES_PAT = str((DATASETS / "nodes" / "[0-9][0-9][0-9][0-9]Q[1-4].csv").resolve())
+EDGES_PAT = str((DATASETS / "edges" / "edge_[0-9][0-9][0-9][0-9]Q[1-4].csv").resolve())
+
+EPOCHS      = 100
+LR          = 1e-3
+WEIGHT_DECAY= 5e-4
+D_MLP_HID   = 256
+DROP        = 0.1
+GRAD_CLIP   = 1.0
+
+RUNS       = 4
+BASE_SEED  = 42
 # ───────────── model ─────────────
 class SimpleMLP(nn.Module):
     def __init__(self, in_feats, mlp_hidden=128, num_classes=4, dropout=0.1):
