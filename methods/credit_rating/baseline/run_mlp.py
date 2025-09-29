@@ -6,13 +6,12 @@ if __name__ == "__main__":
     parser.add_argument("--start_quarter", default="2017Q4")
     parser.add_argument("--end_quarter", default=None)
     parser.add_argument("--runs", type=int, default=1)
-    parser.add_argument("--epochs", type=int, default=60)
+    parser.add_argument("--EPOCHS", type=int, default=60)
     args = parser.parse_args()
 
     run_walkforward_mlp(
         start_quarter=args.start_quarter,
         end_quarter=args.end_quarter,
         runs=args.runs,
-        base_seed=args.base_seed,
-        epochs = args.epochs
+        EPOCHS = args.EPOCHS
     )
