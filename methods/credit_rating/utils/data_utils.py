@@ -2,8 +2,9 @@ import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+import torch
 from sklearn.preprocessing import FunctionTransformer, RobustScaler
-
+TARGET = "rank_next_quarter"
 
 def _set_seed(seed: int):
     import random, numpy as np, torch
