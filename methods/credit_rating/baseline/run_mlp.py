@@ -13,6 +13,6 @@ if __name__ == "__main__":
         start_quarter=args.start_quarter,
         end_quarter=args.end_quarter,
         runs=args.runs,
-        base_seed=42,
-        show_cm=True,
+        base_seed=args.base_seed,
+        epochs = args.epochs
     )
