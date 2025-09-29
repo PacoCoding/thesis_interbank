@@ -69,7 +69,7 @@ class TemporalLSTM(nn.Module):
 
 # ───────────── main walk-forward ─────────────
 def run_walkforward_lstm(start_quarter=None, end_quarter=None, show_cm=False,
-                         runs=1, base_seed=42):
+                         runs=1, base_seed=42, EPOCHS = 60):
     import glob, os
     from sklearn.metrics import (accuracy_score, f1_score, precision_score,
                                  recall_score, classification_report,
