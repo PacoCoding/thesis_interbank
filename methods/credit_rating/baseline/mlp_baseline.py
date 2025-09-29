@@ -14,6 +14,7 @@ from methods.credit_rating.utils.data_utils import (
     enrich_nodes, make_feature_cols, make_preprocessor,
     build_dead_masks_up_to, build_label_for_next
 )
+from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]     # repo root
 DATASETS = ROOT / "datasets"
 
@@ -76,7 +77,7 @@ def run_walkforward_mlp(start_quarter=None, end_quarter=None, runs=1, base_seed=
     else:
         end_idx = quarters_list.index(end_quarter)
 
-    ROOT_DIR = RESULTS_ROOT
+    ROOT_DIR = ROOT
     global_rows = []
 
     for t in range(start_idx, end_idx+1):
