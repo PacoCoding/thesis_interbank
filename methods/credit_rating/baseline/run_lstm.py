@@ -6,9 +6,10 @@ if __name__ == "__main__":
     parser.add_argument("--start_quarter", default = "2017Q4")
     parser.add_argument("--end_quarter", default = None)
     parser.add_argument("--show_cm", default = True)
-    parser.add_argument("--runs", default = 4)
-    parser.add_argument("--base_seed", default = 42)
-    parser.add_argument("--EPOCHS", default = 60)
+    parser.add_argument("--runs", type=int,default = 4)
+    parser.add_argument("--base_seed",type=int, default = 42)
+    parser.add_argument("--EPOCHS", type=int,default = 60)
+    args = parser.parse_args()
     run_walkforward_lstm(
         start_quarter=args.start_quarter,
         end_quarter=args.end_quarter,
