@@ -10,11 +10,8 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score, classification_report
 )
-
-from utils import load_data, preprocess
-from GCN import GCN, Model
-from GAT import GAT
-from TGAR import TGAR
+from methods.credit_rating.graph_model.utils import load_data, preprocess
+from methods.credit_rating.graph_model.TGAR import TGAR, Model
 import random
 import pandas as pd
 import matplotlib.pyplot as plt
