@@ -25,6 +25,8 @@ ROOT = Path(__file__).resolve().parents[3]     # repo root
 DATASETS = ROOT / "datasets"
 
 # use repo-relative patterns (nodes/ and edges/ directories)
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+TARGET = "rank_next_quarter"
 NODES_PAT = str((DATASETS / "nodes" / "[0-9][0-9][0-9][0-9]Q[1-4].csv").resolve())
 EDGES_PAT = str((DATASETS / "edges" / "edge_[0-9][0-9][0-9][0-9]Q[1-4].csv").resolve())
 RESULTS_ROOT = str((ROOT / "results").resolve())
