@@ -149,6 +149,32 @@ def preprocess():
     torch.manual_seed(seed)
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
+def zip_folder(src_dir: str, zip_path: str) -> str:
+    os.makedirs(os.path.dirname(zip_path), exist_ok=True)
+    base, _ = os.path.splitext(zip_path)
+    # creates base + '.zip'
+    return shutil.make_archive(base_name=base, format='zip', root_dir=src_dir)
+
+def download_file(path: str):
+    try:
+        from google.colab import files
+        files.download(path)
+        print(f"Triggered download: {path}")
+    except Exception as e:
+        print(f"[WARN] Auto-download failed ({e}). File is at: {path}")
+
+def set_seed(seed: int):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+def _slug(s: str) -> str:
+    # safe file-friendly model/tag string
+    return ''.join(c if c.isalnum() or c in ('-','_') else '_' for c in s)
 
     mask = torch.arange(9096)
     train_mask = mask[:4548]
