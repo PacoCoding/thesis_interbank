@@ -1,4 +1,4 @@
-from credit_rating.baseline.lstm_baseline import run_walkforward_lstm
+from methods.credit_rating.baseline.lstm_baseline import run_walkforward_lstm
 
 if __name__ == "__main__":
     run_walkforward_lstm(
