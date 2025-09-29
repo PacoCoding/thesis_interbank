@@ -20,9 +20,7 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score, classification_report
 import shutil
 from pathlib import Path
-from methods.credit_rating.utils.data_utils import (
-    TARGET, enrich_nodes, make_feature_cols, make_preprocessor
-)
+from methods.credit_rating.utils.data_utils import *
 ROOT = Path(__file__).resolve().parents[2]     # repo root
 DATASETS = ROOT / "datasets"
 
