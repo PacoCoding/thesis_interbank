@@ -8,10 +8,12 @@ if __name__ == "__main__":
     parser.add_argument("--show_cm", default = True)
     parser.add_argument("--runs", default = 4)
     parser.add_argument("--base_seed", default = 42)
+    parser.add_argument("--EPOCHS", default = 60)
     run_walkforward_lstm(
         start_quarter=args.start_quarter,
         end_quarter=args.end_quarter,
         show_cm=args.show_cm,
         runs=args.runs,
-        base_seed=arge.base_seed
+        base_seed=args.base_seed,
+        EPOCHS = args.EPOCHS
     )
