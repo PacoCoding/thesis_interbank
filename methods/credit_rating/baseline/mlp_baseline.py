@@ -213,7 +213,7 @@ def run_walkforward_mlp(start_quarter=None, end_quarter=None, runs=1, base_seed=
 
         runs_df = pd.DataFrame(run_rows)
         runs_df.to_csv(os.path.join(out_dir, f"runs_{qn}.csv"), index=False)
-       if len(runs_df):
+        if len(runs_df):
             metrics = ["acc","precision_macro","recall_macro","f1_macro"]
             mean_vals = runs_df[metrics].mean().to_frame().T
             std_vals  = runs_df[metrics].std().to_frame().T
