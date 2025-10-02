@@ -1,10 +1,6 @@
 ###########
 # COMPARISON LSTM  (with multi-run + mean/std aggregates)
 ########
-# LSTM baseline — no-leakage, uses all (safe) features + degrees
-# Train:  windows ending at t-2  -> predict t-1
-# Test :  window  ending at t-1  -> predict t
-# Preprocess = heuristic log1p + RobustScaler on all features (fit ≤ t-1)
 
 import os, glob
 import numpy as np
@@ -168,9 +164,14 @@ def run_walkforward_lstm(start_quarter=None, end_quarter=None, show_cm=False,
             _set_seed(seed)
             print(f"  -- run {r+1}/{runs} (seed={seed})")
 
-            # Training pool: e = SEQ_LEN .. t-2
+            # Training pool: ultimi 6 quarter (rolling window)
+            from sklearn.model_selection import train_test_split
+
+# Training pool: ultimi 6 quarter (rolling window)
             pool = []
-            for e in range(SEQ_LEN, t):
+            val_X, val_y = None, None
+            start_e = max(SEQ_LEN, t - 6)
+            for e in range(start_e, t):
                 left = e - SEQ_LEN + 1
                 seq = []
                 for i in range(left, e + 1):
@@ -179,10 +180,18 @@ def run_walkforward_lstm(start_quarter=None, end_quarter=None, show_cm=False,
                     dead_i = all_dead_masks[i]
                     Xt[dead_i, :] = 0
                     seq.append(Xt)
-                X_np = np.stack(seq, axis=0).transpose(1,0,2)
+                X_np = np.stack(seq, axis=0).transpose(1, 0, 2)  # [N,T,F]
                 X_seq = torch.tensor(X_np, dtype=torch.float32, device=DEVICE)
                 y_e = build_label_for_next(usable, e-1, DEVICE)
-                pool.append((X_seq, y_e))
+
+                if e == t-1:
+                    # nell'ultimo quarter di training: split 90/10
+                    idx_train, idx_val = train_test_split(np.arange(len(y_e)), test_size=0.1, random_state=seed)
+                    pool.append((X_seq[idx_train], y_e[idx_train]))
+                    val_X, val_y = X_seq[idx_val], y_e[idx_val]
+                else:
+                    pool.append((X_seq, y_e))
+
 
             # Class weights from alive labels in pool
             all_y = np.concatenate([y.cpu().numpy() for _, y in pool])
@@ -221,15 +230,14 @@ def run_walkforward_lstm(start_quarter=None, end_quarter=None, show_cm=False,
                 if ep == 1 or ep % 10 == 0 or ep == EPOCHS:
                     model.eval()
                     with torch.no_grad():
-                        logits_te = model(X_test)
-                        preds_te = logits_te.argmax(dim=1).cpu().numpy()
-                    m = alive_mask
-                    if m.sum():
-                        acc_te = accuracy_score(y_true_full[m], preds_te[m])
-                        f1_te  = f1_score(y_true_full[m], preds_te[m], average='macro')
-                        print(f"      [E{ep:02d}/{EPOCHS}] loss={total_loss/len(pool):.4f} | TEST ACC={acc_te:.3f} F1={f1_te:.3f}")
-                    else:
-                        print(f"      [E{ep:02d}/{EPOCHS}] loss={total_loss/len(pool):.4f} | no alive labels")
+                        if val_X is not None:
+                            val_preds = model(val_X).argmax(dim=1).cpu().numpy()
+                            val_true = val_y.cpu().numpy()
+                            m_val = (val_true != -100)
+                            if m_val.sum():
+                                val_acc = accuracy_score(val_true[m_val], val_preds[m_val])
+                                val_f1  = f1_score(val_true[m_val], val_preds[m_val], average='macro')
+                                print(f"      [E{ep:02d}/{EPOCHS}] VAL ACC={val_acc:.3f} F1={val_f1:.3f}")
 
             # Final eval this run
             model.eval()
