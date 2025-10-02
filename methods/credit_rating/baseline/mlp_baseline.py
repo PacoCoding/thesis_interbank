@@ -7,18 +7,21 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer, RobustScaler
 from sklearn.utils.class_weight import compute_class_weight
-from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, classification_report, confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import (accuracy_score, f1_score, precision_score,
+                             recall_score, classification_report,
+                             confusion_matrix, ConfusionMatrixDisplay)
 import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
 from methods.credit_rating.utils.data_utils import (
     TARGET, _set_seed, _clean_id,
     enrich_nodes, make_feature_cols, make_preprocessor,
     build_dead_masks_up_to, build_label_for_next
 )
 from pathlib import Path
+
 ROOT = Path(__file__).resolve().parents[3]     # repo root
 DATASETS = ROOT / "datasets"
 
-# use repo-relative patterns (nodes/ and edges/ directories)
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 TARGET = "rank_next_quarter"
 NODES_PAT = str((DATASETS / "nodes" / "[0-9][0-9][0-9][0-9]Q[1-4].csv").resolve())
@@ -33,6 +36,8 @@ GRAD_CLIP   = 1.0
 
 RUNS       = 4
 BASE_SEED  = 42
+SEQ_LEN    = 6
+
 # ───────────── model ─────────────
 class SimpleMLP(nn.Module):
     def __init__(self, in_feats, mlp_hidden=128, num_classes=4, dropout=0.1):
@@ -46,7 +51,7 @@ class SimpleMLP(nn.Module):
         return self.net(x)
 
 # ───────────── walk-forward ─────────────
-def run_walkforward_mlp(start_quarter=None, end_quarter=None, runs=1, base_seed=42):
+def run_walkforward_mlp(start_quarter=None, end_quarter=None, runs=1, base_seed=42, EPOCHS=EPOCHS):
     nodes_paths = sorted(glob.glob(NODES_PAT))
     edges_paths = sorted(glob.glob(EDGES_PAT))
     quarters    = [os.path.basename(p).replace('.csv','') for p in nodes_paths]
@@ -69,15 +74,16 @@ def run_walkforward_mlp(start_quarter=None, end_quarter=None, runs=1, base_seed=
 
     # range
     if start_quarter is None:
-        start_idx = 1
+        start_idx = SEQ_LEN
     else:
-        start_idx = max(quarters_list.index(start_quarter), 1)
+        start_idx = max(quarters_list.index(start_quarter), SEQ_LEN)
     if end_quarter is None:
         end_idx = len(usable) - 1
     else:
         end_idx = quarters_list.index(end_quarter)
 
-    ROOT_DIR = ROOT
+    ROOT_DIR = "./results_mlp"
+    os.makedirs(ROOT_DIR, exist_ok=True)
     global_rows = []
 
     for t in range(start_idx, end_idx+1):
@@ -106,13 +112,22 @@ def run_walkforward_mlp(start_quarter=None, end_quarter=None, runs=1, base_seed=
             _set_seed(seed)
             print(f"  -- run {r+1}/{runs} (seed={seed})")
 
-            # Train pool: up to t-1
+            # Rolling window: last 6 quarters before t
             pool = []
-            for e in range(1, t):
+            val_X, val_y = None, None
+            start_e = max(SEQ_LEN, t - SEQ_LEN)
+            for e in range(start_e, t):
                 df_e, _, _ = usable[e]
                 Xe = pre.transform(df_e[FEATURE_COLS])
                 y_e = build_label_for_next(usable, e-1, DEVICE)
-                pool.append((torch.tensor(Xe, dtype=torch.float32, device=DEVICE), y_e))
+
+                if e == t-1:
+                    # validation 10% of last train quarter
+                    idx_train, idx_val = train_test_split(np.arange(len(y_e)), test_size=0.1, random_state=seed)
+                    pool.append((torch.tensor(Xe[idx_train], dtype=torch.float32, device=DEVICE), y_e[idx_train]))
+                    val_X, val_y = torch.tensor(Xe[idx_val], dtype=torch.float32, device=DEVICE), y_e[idx_val]
+                else:
+                    pool.append((torch.tensor(Xe, dtype=torch.float32, device=DEVICE), y_e))
 
             # Class weights
             all_y = np.concatenate([y.cpu().numpy() for _, y in pool])
@@ -144,13 +159,15 @@ def run_walkforward_mlp(start_quarter=None, end_quarter=None, runs=1, base_seed=
 
                 if ep==1 or ep%10==0 or ep==EPOCHS:
                     model.eval()
-                    with torch.no_grad():
-                        preds_te = model(torch.tensor(X_te, dtype=torch.float32, device=DEVICE)).argmax(dim=1).cpu().numpy()
-                    m = alive_mask
-                    if m.sum():
-                        acc_te = accuracy_score(y_true_full[m], preds_te[m])
-                        f1_te  = f1_score(y_true_full[m], preds_te[m], average='macro')
-                        print(f"      [E{ep:02d}/{EPOCHS}] loss={total_loss/len(pool):.4f} | TEST ACC={acc_te:.3f} F1={f1_te:.3f}")
+                    if val_X is not None:
+                        with torch.no_grad():
+                            val_preds = model(val_X).argmax(dim=1).cpu().numpy()
+                            val_true = val_y.cpu().numpy()
+                            m_val = (val_true != -100)
+                            if m_val.sum():
+                                val_acc = accuracy_score(val_true[m_val], val_preds[m_val])
+                                val_f1  = f1_score(val_true[m_val], val_preds[m_val], average='macro')
+                                print(f"      [E{ep:02d}/{EPOCHS}] VAL ACC={val_acc:.3f} F1={val_f1:.3f}")
 
             # Final eval
             model.eval()
@@ -196,10 +213,16 @@ def run_walkforward_mlp(start_quarter=None, end_quarter=None, runs=1, base_seed=
 
         runs_df = pd.DataFrame(run_rows)
         runs_df.to_csv(os.path.join(out_dir, f"runs_{qn}.csv"), index=False)
-        if len(runs_df):
-            agg = runs_df[["acc","precision_macro","recall_macro","f1_macro"]].agg(['mean','std'])
-            agg.to_csv(os.path.join(out_dir, f"aggregate_metrics_{qn}.csv"))
-
+       if len(runs_df):
+            metrics = ["acc","precision_macro","recall_macro","f1_macro"]
+            mean_vals = runs_df[metrics].mean().to_frame().T
+            std_vals  = runs_df[metrics].std().to_frame().T
+            mean_vals.index = ["mean"]
+            std_vals.index  = ["std"]
+            agg = pd.concat([mean_vals, std_vals])
+            agg_csv = os.path.join(out_dir, f"aggregate_metrics_{qn}.csv")
+            agg.to_csv(agg_csv)
+            print(f"Saved aggregate mean/std: {agg_csv}")
         if len(cms_norm)>0:
             mean_cm = np.mean(np.stack(cms_norm, axis=0), axis=0)
             disp = ConfusionMatrixDisplay(mean_cm, display_labels=[str(i) for i in range(OUT_CLASSES)])
