@@ -1,6 +1,8 @@
 import torch
 import numpy as np
-
+import random
+import os
+import shutil
 
 def load_data(year,Q,attack_rate=0):
     if Q==1:
@@ -41,24 +43,26 @@ def load_data(year,Q,attack_rate=0):
     features = []
     labels = []
     weights = []
-    dead_mask = []          # <-- NEW: will become a bool mask over nodes
-    n1 = 0                  # number of nodes in first quarter (content1)
+    dead_mask = []          
+    n1 = 0                 
 
     with open(content1, "r") as f:
         lines = f.readlines()
+        # Extract all the variable names from the CVS file
         header = lines[0].strip().split(',')
-        # robustly locate Equity and label column
-        # Equity name may vary in case/spaces; adjust if your header differs
+
+        # For all the variables in the header it will remove blank spaces and finds equity and give it to the variable
         eq_idx = next(i for i, h in enumerate(header) if h.strip().lower() == "equity")
-        # your label can be last or third from last; keep your logic:
+        # Iterate over all the lines but the header
         for j, node in enumerate(lines[1:]):
             node_info = node.strip('\n').split(',')
             node_id = node_info[0]
             index_dict[node_id] = len(index_dict)
 
-            # features (same as yours)
+            # Because we use all 72 features, we remove the index, and the rank_next_quarter and the srisk variables
             if len(node_info) > 72:
                 feats = [float(i) for i in node_info[1:-3]]
+                # Provide rank_next_quarter as target variable
                 label_str = node_info[-3]
             else:
                 feats = [float(i) for i in node_info[1:-1]]
@@ -66,6 +70,7 @@ def load_data(year,Q,attack_rate=0):
             features.append(feats)
 
             # dead if Equity < 0
+            # For every row (node\banks) it evaluates thw index whether it is smaller than 0 or not
             eq_val = float(node_info[eq_idx])
             dead_mask.append(eq_val < 0.0)
 
@@ -73,7 +78,7 @@ def load_data(year,Q,attack_rate=0):
                 label_to_index[label_str] = len(label_to_index)
             labels.append(label_to_index[label_str])
 
-    n1 = len(index_dict)              # <-- dynamic offset
+    n1 = len(index_dict)              
     # ---------- content2 ----------
     with open(content2, "r") as f:
         lines = f.readlines()
@@ -81,7 +86,9 @@ def load_data(year,Q,attack_rate=0):
         eq_idx2 = next(i for i, h in enumerate(header2) if h.strip().lower() == "equity")
         for node in lines[1:]:
             node_info = node.strip('\n').split(',')
-            node_id = str(int(node_info[0]) + n1)   # <-- offset by n1 instead of 24271
+
+            # Offset in order to avoid using the same index for the 2 quarters. So the second quarter has the n1 = len(index_dict)
+            node_id = str(int(node_info[0]) + n1) 
             index_dict[node_id] = len(index_dict)
 
             if len(node_info) > 72:
@@ -101,21 +108,23 @@ def load_data(year,Q,attack_rate=0):
 
     # ---------- edges (drop any incident to dead nodes) ----------
     edge_index = []
+    # dead_arr contains already the dead nodes index
     dead_arr = np.array(dead_mask, dtype=bool)
 
     def _add_edges(path, offset=0, has_weight=True):
       with open(path, "r") as f:
           lines = f.readlines()
+          # Here we have the df index, we iterate over all the rows but the header
           for k, line in enumerate(lines[1:]):
               parts = line.strip('\n').split(',')
-              # read endpoints (+ optional weight in col 3)
+              # if statement in case we want the weight feature parts[0] sourceid, parts[1] targetid parts[3] weight
               if has_weight:
                   start, end = parts[0], parts[1]
                   w = float(parts[2]) if len(parts) >= 3 else 1.0
               else:
                   start, end = parts[0], parts[1]
                   w = 1.0
-
+              # To deal with the 2 graphs
               sid = str(int(start) + offset)
               tid = str(int(end) + offset)
               if sid in index_dict and tid in index_dict:
@@ -131,11 +140,13 @@ def load_data(year,Q,attack_rate=0):
     # edges for content2 (offset n1)
     _add_edges(cites2, offset=n1, has_weight=True)
 
+    # Here we just add averythin in tensor format
+
     labels   = torch.LongTensor(labels)
     features = torch.FloatTensor(features)
     edge_index = torch.LongTensor(edge_index)
     edge_weight = torch.tensor(weights, dtype=torch.float)
-    dead_mask = torch.tensor(dead_arr, dtype=torch.bool)     # <-- NEW
+    dead_mask = torch.tensor(dead_arr, dtype=torch.bool)     
     edge_weight = torch.clamp(edge_weight, min=0.0)
     return label_to_index, labels, features, edge_index, dead_mask,edge_weight 
 
@@ -149,12 +160,14 @@ def preprocess():
     torch.manual_seed(seed)
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
+
 def zip_folder(src_dir: str, zip_path: str) -> str:
     os.makedirs(os.path.dirname(zip_path), exist_ok=True)
     base, _ = os.path.splitext(zip_path)
     # creates base + '.zip'
     return shutil.make_archive(base_name=base, format='zip', root_dir=src_dir)
-
+    
+# Trial for downloading directly from Colab
 def download_file(path: str):
     try:
         from google.colab import files
@@ -173,7 +186,7 @@ def set_seed(seed: int):
     torch.backends.cudnn.benchmark = False
 
 def _slug(s: str) -> str:
-    # safe file-friendly model/tag string
+    
     return ''.join(c if c.isalnum() or c in ('-','_') else '_' for c in s)
 
     mask = torch.arange(9096)
