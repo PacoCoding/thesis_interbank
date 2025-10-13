@@ -174,16 +174,10 @@ result_dir = f'./results/{tag}'
 os.makedirs(result_dir, exist_ok=True)
 
 def build_net():
-    if args.net == "GCN":
-        return GCN(features.shape[1], num_classes, hiddim=args.hiddim,
-                   droprate=args.droprate, hidlayers=args.hidlayers, p=1).to(device)
-    elif args.net == "GAT":
-        return GAT(features.shape[1], num_classes, hiddim=args.hiddim,
-                   droprate=args.droprate, hidlayers=args.hidlayers, p=1).to(device)
-    else:  # TGAR
-        return TGAR(args.batchsize, features.shape[1], num_classes, hiddim=args.hiddim,
+    
+      return TGAR(args.batchsize, features.shape[1], num_classes, hiddim=args.hiddim,
                     droprate=args.droprate, hidlayers=args.hidlayers, p=1, hyper_k=4).to(device)
-
+    
 def save_cm(y_true_np, y_pred_np, run_idx, year, quarter, model_name, out_dir):
     classes = np.arange(num_classes)
     cm = confusion_matrix(y_true_np, y_pred_np, labels=classes, normalize='true')
