@@ -217,7 +217,7 @@ for i in range(args.runs):
                     tru_all.append(t); pred_all.append(p)
                 tru_t  = torch.cat(tru_all).cpu().numpy()
                 pred_t = torch.cat(pred_all).cpu().numpy()
-            print("USING VAL LOADER")
+            
             acc  = accuracy_score(tru_t, pred_t)
             prec = precision_score(tru_t, pred_t, average='macro', zero_division=0)
             rec  = recall_score(tru_t, pred_t, average='macro', zero_division=0)
