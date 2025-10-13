@@ -36,7 +36,7 @@ parser.add_argument('--epochs', type=int,  default=1000, help='Epochs.')
 parser.add_argument('--batchsize', type=int, default=4548, help='Batch size (seed nodes).')
 parser.add_argument('--numneighbors', type=int, default=30, help='Neighbors (unused with -1).')
 parser.add_argument('--hidlayers', type=int, default=2, help='Hidden layers.')
-parser.add_argument('--net', type=str, default="GCN", choices=["GCN", "GAT", "TGAR"])
+parser.add_argument('--net', type=str, default="TGAR", choices=["TGAR"])
 args = parser.parse_args()
 
 os.makedirs("./results", exist_ok=True)
@@ -157,13 +157,13 @@ class WeightedModel(Model):
         return tru, pred
 
 # Net
-if args.net == "GCN":
-    gnnnet = GCN(features.shape[1], num_classes, hiddim=args.hiddim, droprate=args.droprate, hidlayers=args.hidlayers, p=1).to(device)
-elif args.net == "GAT":
-    gnnnet = GAT(features.shape[1], num_classes, hiddim=args.hiddim, droprate=args.droprate, hidlayers=args.hidlayers, p=1).to(device)
-else:  # TGAR
-    gnnnet = TGAR(args.batchsize, features.shape[1], num_classes, hiddim=args.hiddim, droprate=args.droprate, hidlayers=args.hidlayers, p=1, hyper_k=4).to(device)
 
+   
+if args.net == "TGAR":  # TGAR
+    gnnnet = TGAR(args.batchsize, features.shape[1], num_classes, hiddim=args.hiddim, droprate=args.droprate, hidlayers=args.hidlayers, p=1, hyper_k=4).to(device)
+else:
+  print("Model does not exist")
+  
 model = WeightedModel(gnnnet, args, device, class_weight=class_weight)
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -223,7 +223,7 @@ for i in range(args.runs):
                     tru_all.append(t); pred_all.append(p)
                 tru_t  = torch.cat(tru_all).cpu().numpy()
                 pred_t = torch.cat(pred_all).cpu().numpy()
-
+            print("USING VAL LOADER")
             acc  = accuracy_score(tru_t, pred_t)
             prec = precision_score(tru_t, pred_t, average='macro', zero_division=0)
             rec  = recall_score(tru_t, pred_t, average='macro', zero_division=0)
@@ -298,7 +298,6 @@ print(f"Appended aggregate to: {global_csv_path}")
 
 # ── Mean confusion matrix (average of normalized CMs)
 if len(cms_normalized) > 0:
-    import numpy as np
     mean_cm = np.mean(np.stack(cms_normalized, axis=0), axis=0)
     disp = ConfusionMatrixDisplay(mean_cm, display_labels=[str(i) for i in range(num_classes)])
     fig = disp.plot(include_values=True, cmap='Blues', values_format=".2f", colorbar=False).figure_
