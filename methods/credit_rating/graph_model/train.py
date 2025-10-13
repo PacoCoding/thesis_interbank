@@ -218,7 +218,7 @@ for i in range(args.runs):
         if (epoch + 1) % 10 == 0 or epoch == args.epochs - 1:
             with torch.no_grad():
                 tru_all, pred_all = [], []
-                for tb in test_loader:
+                for tb in val_loader:
                     t, p = model.test(tb)
                     tru_all.append(t); pred_all.append(p)
                 tru_t  = torch.cat(tru_all).cpu().numpy()
