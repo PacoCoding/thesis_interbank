@@ -10,16 +10,19 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score, classification_report
 )
-from methods.credit_rating.graph_model.utils import load_data, preprocess
+from methods.credit_rating.graph_model.utils import load_data, preprocess, set_seed, _slug, download_file, zip_folder
 from methods.credit_rating.graph_model.TGAR import TGAR, Model
 import random
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+import os, shutil
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Args
 # ──────────────────────────────────────────────────────────────────────────────
+
+# Useful for testing the models and different hypperparameters
 parser = argparse.ArgumentParser()
 parser.add_argument('--lr', type=float, default=0.01, help='Initial learning rate.')
 parser.add_argument('--hiddim', type=int, default=256, help='Hidden units.')
@@ -36,33 +39,6 @@ parser.add_argument('--net', type=str, default="GCN", choices=["GCN", "GAT", "TG
 args = parser.parse_args()
 
 os.makedirs("./results", exist_ok=True)
-import os, shutil
-def zip_folder(src_dir: str, zip_path: str) -> str:
-    os.makedirs(os.path.dirname(zip_path), exist_ok=True)
-    base, _ = os.path.splitext(zip_path)
-    # creates base + '.zip'
-    return shutil.make_archive(base_name=base, format='zip', root_dir=src_dir)
-
-def download_file(path: str):
-    try:
-        from google.colab import files
-        files.download(path)
-        print(f"Triggered download: {path}")
-    except Exception as e:
-        print(f"[WARN] Auto-download failed ({e}). File is at: {path}")
-
-def set_seed(seed: int):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-
-def _slug(s: str) -> str:
-    # safe file-friendly model/tag string
-    return ''.join(c if c.isalnum() or c in ('-','_') else '_' for c in s)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Data (single quarter file that contains [older | newer] halves)
@@ -327,8 +303,3 @@ if len(cms_normalized) > 0:
 zip_path = f"/content/{os.path.basename(result_dir)}.zip"
 zip_folder(result_dir, zip_path)
 download_file(zip_path)
-
-# (optional) also download/backup the global summary
-global_csv_path = os.path.join(RESULTS_ROOT, 'summary.csv')
-if os.path.isfile(global_csv_path):
-    download_file(global_csv_path)
