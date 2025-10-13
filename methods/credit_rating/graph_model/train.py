@@ -12,6 +12,7 @@ from sklearn.metrics import (
 )
 from methods.credit_rating.graph_model.utils import load_data, preprocess, set_seed, _slug, download_file, zip_folder
 from methods.credit_rating.graph_model.TGAR import TGAR, Model
+from sklearn.utils.class_weight import compute_class_weight
 import random
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -46,42 +47,47 @@ os.makedirs("./results", exist_ok=True)
 label_to_index, labels, features, edge_index, dead_mask, edge_weight = load_data(args.year, args.quarter)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# Halves: first = older (train pool), second = newer (test)
+#  divide the initial database that is composed by new + old graph in the two distinct databases
 N = labels.size(0)
 N_old = N // 2
+# 2 indices array for the old and new
 idx_old = np.arange(0, N_old)
 idx_new = np.arange(N_old, N)
 
 # Stratify ONLY within the older half
 y_old = labels[idx_old].cpu().numpy()
 sss = StratifiedShuffleSplit(n_splits=1, train_size=0.9, random_state=42)
+# next is used for extracting the results
 tr_old, val_old = next(sss.split(idx_old, y_old))
 
 train_idx = idx_old[tr_old]
 val_idx   = idx_old[val_old]
 test_idx  = idx_new
 
-# Masks
+# Masks creation, first full of False then index for train,val and test with True, this is for the OLD graph
 train_mask = torch.zeros(N, dtype=torch.bool); train_mask[torch.from_numpy(train_idx)] = True
 val_mask   = torch.zeros(N, dtype=torch.bool); val_mask[torch.from_numpy(val_idx)]     = True
 test_mask  = torch.zeros(N, dtype=torch.bool); test_mask[torch.from_numpy(test_idx)]   = True
 
 # Safe scaling (fit on TRAIN nodes only)
+# Evaluate whehther transforming features in numpy if they are not already, fundamental for the normalization
 X_np = features.numpy() if isinstance(features, torch.Tensor) else features
 fit_idx = train_idx[~dead_mask[train_idx].numpy()]
 scaler = MinMaxScaler()
-scaler.fit(X_np[fit_idx])                      # << use fit_idx (alive in train)
+scaler.fit(X_np[fit_idx])                     # Only fitting index in train and ALIVE
 X_norm = torch.from_numpy(scaler.transform(X_np)).float()
-edge_weight = torch.clamp(edge_weight, min=0.0) 
+edge_weight = torch.clamp(edge_weight, min=0.0) # Clapping weights for the Transformer 
+# Just for making the vector in column shape
 edge_attr = edge_weight.view(-1, 1)
 
 data = Data(
     x=X_norm,
     edge_index=edge_index.t().contiguous(),
-    edge_attr=edge_attr,   # << add weights, clip
+    edge_attr=edge_attr,   
     y=labels,
     dead=dead_mask
 ).to(device)
+
 print("Total nodes:", data.num_nodes)
 print("Dead nodes (all):", int(data.dead.sum()))
 print("Dead in TRAIN:", int(data.dead[train_mask].sum()))
@@ -94,7 +100,7 @@ print("Edges incident to dead (should be 0):", touch_dead)
 cross = (train_mask[src] & test_mask[dst]) | (test_mask[src] & train_mask[dst])
 print("cross-split edges:", int(cross.sum().item()))  # expect 0
 
-# Loaders
+# Loaders objects
 train_loader = NeighborLoader(
     data, num_neighbors=[-1], batch_size=min(args.batchsize, len(train_idx)), input_nodes=train_mask
 )
@@ -106,7 +112,6 @@ test_loader = NeighborLoader(
 )
 
 # Class weights (train-only)
-from sklearn.utils.class_weight import compute_class_weight
 num_classes = len(label_to_index)
 cw = compute_class_weight(class_weight='balanced',
                           classes=np.arange(num_classes),
@@ -122,10 +127,13 @@ class WeightedModel(Model):
 
     def fit(self, batch):
         self.optimizer.zero_grad()
+        # out is a tensor with rows the nodes and column the classses, for each a probability
         out = self.model(batch)  # log-probs [num_nodes_in_subgraph, C]
+        # nodes.x has information also about the neighbours, we only want the actual node for the los
         logits = out[:batch.batch_size]
         y      = batch.y[:batch.batch_size]
         # drop dead seeds
+        # check if the object batch has attribute
         if hasattr(batch, 'dead'):
             keep = ~batch.dead[:batch.batch_size]
             logits = logits[keep]
