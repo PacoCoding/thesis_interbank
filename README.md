@@ -37,14 +37,13 @@ python -m methods.credit_rating.graph_model.train --net [TGAR] --year [predict_y
 
 To train the **LSTM** model, run
 ```
-!python -m methods.credit_rating.baseline.run_lstm --start_quarter [first_year] --end_quarter[last_year] --EPOCHS[epochs] 
+python -m methods.credit_rating.baseline.run_lstm --start_quarter [first_year] --end_quarter[last_year] --EPOCHS[epochs] 
 ```
 
 To train the **MLP** model, run
 ```
-!python -m methods.credit_rating.baseline.run_mlp --start_quarter [first_year] --end_quarter[last_year] --EPOCHS[epochs]
+python -m methods.credit_rating.baseline.run_mlp --start_quarter [first_year] --end_quarter[last_year] --EPOCHS[epochs]
 ```
-
 
 ## Requirements
 
