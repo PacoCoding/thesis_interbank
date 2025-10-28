@@ -1,5 +1,7 @@
 cff-version: 1.2.0
+type: software
 message: "If you use this software, please cite it as below."
+url: "https://github.com/PacoCoding/thesis_interbank"
 authors:
   - family-names: Salvagnin
     given-names: Francesco
