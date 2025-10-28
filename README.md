@@ -12,11 +12,11 @@ Source codes implementation of papers:
 
 - [Repo Structure](#repo-structure)
 - [Dataset](#dataset)
-- [Methods](#Methods)
+- [Methods](#methods)
   - [credit_rating](#credit_rating)
-      -[baseline](#baseline)
-      -[graph_model](#graph_model)
-      -[utils](#utils)
+    - [baseline](#baseline)
+    - [graph_model](#graph_model)
+    - [utils](#utils
 
 ## Repo Structure
 
@@ -59,7 +59,6 @@ torch-cluster                1.6.1
 pyg                          2.3.0
 torch-scatter                2.1.1
 torch-sparse                 0.6.17
-tqdm                         4.42.1
 scikit-learn                 1.0.2
 pandas                       1.2.3
 numpy                        1.21.5
