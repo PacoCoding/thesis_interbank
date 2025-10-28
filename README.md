@@ -4,9 +4,7 @@ Interbank Risk and Credit Rating: Datasets and Methods
 
 ## Overview
 
-Source codes implementation of papers:
-
-- Credit Rating Method:
+This repository contains the codes of the master thesis: A GNN-Based Framework for Bank Creditworthiness Prediction Using Interbank Networks by Francesco Salvagnin
   
 ## Contents
 
