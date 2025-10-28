@@ -4,7 +4,7 @@ Interbank Risk and Credit Rating: Datasets and Methods
 
 ## Overview
 
-This repository contains the codes of the master thesis: A GNN-Based Framework for Bank Creditworthiness Prediction Using Interbank Networks by Francesco Salvagnin
+This repository contains the codes of the master thesis: A GNN-Based Framework for Bank Creditworthiness Prediction Using Interbank Networks by Francesco Salvagnin.
   
 ## Contents
 
@@ -15,13 +15,14 @@ This repository contains the codes of the master thesis: A GNN-Based Framework f
   
 ## Repo Structure
 
-`datasets/:` dataset files;
+`datasets/:` dataset files
 
 `methods/:` the implementation of interbank credit rating methods
 
 ## Dataset
 
 The Dataset is collected from the GitHub repository: https://github.com/AI4Risk/interbank
+
 ## Methods
 
 Contains all the methods used for train the baseline models and the TGAR model
