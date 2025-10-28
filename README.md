@@ -27,7 +27,7 @@ The Dataset is collected from the GitHub repository: https://github.com/AI4Risk/
 
 Contains all the methods used for train the baseline models and the TGAR model
 
-### Train
+## Train
 
 To train the **TGAR** model, run
 
