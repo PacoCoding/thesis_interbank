@@ -12,11 +12,13 @@ Source codes implementation of papers:
 
 - [Repo Structure](#repo-structure)
 - [Dataset](#dataset)
+    - [edges](#edges)
+    - [nodes](#nodes)
 - [Methods](#methods)
   - [credit_rating](#credit_rating)
     - [baseline](#baseline)
     - [graph_model](#graph_model)
-    - [utils](#utils
+    - [utils](#utils)
 
 ## Repo Structure
 
