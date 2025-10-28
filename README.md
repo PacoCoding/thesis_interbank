@@ -12,14 +12,9 @@ Source codes implementation of papers:
 
 - [Repo Structure](#repo-structure)
 - [Dataset](#dataset)
-    - [edges](#edges)
-    - [nodes](#nodes)
-- [Methods](#methods)
-  - [credit_rating](#credit_rating)
-    - [baseline](#baseline)
-    - [graph_model](#graph_model)
-    - [utils](#utils)
-
+- [Train](#Train)
+- [Requirements](#Requirements)
+  
 ## Repo Structure
 
 `datasets/:` dataset files;
@@ -55,16 +50,13 @@ To train the **MLP** model, run
 ## Requirements
 
 ```
-python                       3.7.16
-torch                        1.13.1
-torch-cluster                1.6.1
-pyg                          2.3.0
+python                       3.12.12
+torch-geometric              2.5.3
+torch                        2.5.1  
+pyg_lib                      0.4.0
 torch-scatter                2.1.1
-torch-sparse                 0.6.17
-scikit-learn                 1.0.2
-pandas                       1.2.3
-numpy                        1.21.5
+torch-sparse                 1.6.3
+scikit-learn                 1.6.1
+pandas                       2.2.2
+numpy                        2.3.4
 ```
-
-
-## 
