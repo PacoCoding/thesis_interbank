@@ -64,20 +64,18 @@ train_idx = idx_old[tr_old]
 val_idx   = idx_old[val_old]
 test_idx  = idx_new
 
-# Masks creation, first full of False then index for train,val and test with True, this is for the OLD graph
 train_mask = torch.zeros(N, dtype=torch.bool); train_mask[torch.from_numpy(train_idx)] = True
 val_mask   = torch.zeros(N, dtype=torch.bool); val_mask[torch.from_numpy(val_idx)]     = True
 test_mask  = torch.zeros(N, dtype=torch.bool); test_mask[torch.from_numpy(test_idx)]   = True
 
 # Safe scaling (fit on TRAIN nodes only)
-# Evaluate whehther transforming features in numpy if they are not already, fundamental for the normalization
 X_np = features.numpy() if isinstance(features, torch.Tensor) else features
 fit_idx = train_idx[~dead_mask[train_idx].numpy()]
 scaler = MinMaxScaler()
 scaler.fit(X_np[fit_idx])                     # Only fitting index in train and ALIVE
 X_norm = torch.from_numpy(scaler.transform(X_np)).float()
-edge_weight = torch.clamp(edge_weight, min=0.0) # Clapping weights for the Transformer 
-# Just for making the vector in column shape
+edge_weight = torch.clamp(edge_weight, min=0.0) # Clapping weights for the Transformer otherwise not working 
+
 edge_attr = edge_weight.view(-1, 1)
 
 data = Data(
@@ -93,7 +91,7 @@ print("Dead nodes (all):", int(data.dead.sum()))
 print("Dead in TRAIN:", int(data.dead[train_mask].sum()))
 print("Dead in VAL:",   int(data.dead[val_mask].sum()))
 print("Dead in TEST:",  int(data.dead[test_mask].sum()))
-# Sanity: no train↔test edges
+# Sanity checks...
 src, dst = data.edge_index
 touch_dead = (data.dead[src] | data.dead[dst]).sum().item()
 print("Edges incident to dead (should be 0):", touch_dead)
@@ -127,13 +125,12 @@ class WeightedModel(Model):
 
     def fit(self, batch):
         self.optimizer.zero_grad()
-        # out is a tensor with rows the nodes and column the classses, for each a probability
+        
         out = self.model(batch)  # log-probs [num_nodes_in_subgraph, C]
-        # nodes.x has information also about the neighbours, we only want the actual node for the los
+    
         logits = out[:batch.batch_size]
         y      = batch.y[:batch.batch_size]
-        # drop dead seeds
-        # check if the object batch has attribute
+       
         if hasattr(batch, 'dead'):
             keep = ~batch.dead[:batch.batch_size]
             logits = logits[keep]
@@ -157,9 +154,8 @@ class WeightedModel(Model):
         return tru, pred
 
 # Net
-
    
-if args.net == "TGAR":  # TGAR
+if args.net == "TGAR": 
     gnnnet = TGAR(args.batchsize, features.shape[1], num_classes, hiddim=args.hiddim, droprate=args.droprate, hidlayers=args.hidlayers, p=1, hyper_k=4).to(device)
 else:
   print("Model does not exist")
@@ -167,7 +163,7 @@ else:
 model = WeightedModel(gnnnet, args, device, class_weight=class_weight)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Train loop — keep only LAST epoch metrics for saving
+# Train loop
 # ──────────────────────────────────────────────────────────────────────────────
 tag = f"{args.year}Q{args.quarter}_{args.net}"
 result_dir = f'./results/{tag}'
@@ -191,8 +187,8 @@ def save_cm(y_true_np, y_pred_np, run_idx, year, quarter, model_name, out_dir):
     plt.close(fig)
     return cm
 
-runs_rows = []         # per-run metrics rows (for CSV)
-cms_normalized = []    # per-run normalized confusion matrices
+runs_rows = []         # run metrics rows CSV format
+cms_normalized = []    # normalized confusion matrices
 
 for i in range(args.runs):
     seed = args.base_seed + i
@@ -208,7 +204,7 @@ for i in range(args.runs):
         for batch in train_loader:
             model.fit(batch)
 
-        # (optional) progress log every 10 epochs
+      
         if (epoch + 1) % 10 == 0 or epoch == args.epochs - 1:
             with torch.no_grad():
                 tru_all, pred_all = [], []
@@ -225,7 +221,7 @@ for i in range(args.runs):
 
             print(f"[RUN {i+1} | E{epoch+1}/{args.epochs}] ACC={acc:.4f} | P={prec:.4f} | R={rec:.4f} | F1={f1:.4f}")
 
-    # ── final eval for this run
+
     with torch.no_grad():
         tru_all, pred_all = [], []
         for tb in test_loader:
@@ -234,14 +230,13 @@ for i in range(args.runs):
         y_true = torch.cat(tru_all).cpu().numpy()
         y_pred = torch.cat(pred_all).cpu().numpy()
 
-    # metrics
     acc  = accuracy_score(y_true, y_pred)
     prec = precision_score(y_true, y_pred, average='macro', zero_division=0)
     rec  = recall_score(y_true, y_pred, average='macro', zero_division=0)
     f1   = f1_score(y_true, y_pred, average='macro', zero_division=0)
     report = classification_report(y_true, y_pred, digits=5, zero_division=0)
 
-    # save per-run classification report
+    # save classification report per run 
     txt_path = os.path.join(result_dir, f"classification_report_run{i+1}.txt")
     with open(txt_path, 'w', encoding='utf-8') as f:
         f.write(f"{gnnnet.model_name} | {tag} | seed={seed} | epochs={args.epochs}\n")
@@ -249,7 +244,7 @@ for i in range(args.runs):
         f.write(report)
     print(f"Wrote TXT: {txt_path}")
 
-    # confusion matrix (normalized)
+    # confusion matrix ì
     cm_norm = save_cm(
         y_true, y_pred, run_idx=i+1,
         year=args.year, quarter=args.quarter,
@@ -272,13 +267,11 @@ runs_csv = os.path.join(result_dir, "runs.csv")
 runs_df.to_csv(runs_csv, index=False)
 print(f"Wrote per-run metrics: {runs_csv}")
 
-# ── Mean/Std aggregate under tag folder
 agg = runs_df[["acc","precision_macro","recall_macro","f1_macro"]].agg(['mean','std'])
 agg_csv = os.path.join(result_dir, "aggregate_metrics.csv")
 agg.to_csv(agg_csv)
 print(f"Wrote aggregate mean/std: {agg_csv}")
 
-# ── Also append a single aggregate row to global summary.csv (root)
 summary_row = {
     "year": args.year, "quarter": args.quarter, "model": gnnnet.model_name,
     "net_flag": f"{args.net}_mean{args.runs}", "epochs": args.epochs,
@@ -290,7 +283,6 @@ header_needed = not os.path.isfile(global_csv_path)
 pd.DataFrame([summary_row]).to_csv(global_csv_path, mode='a', header=header_needed, index=False)
 print(f"Appended aggregate to: {global_csv_path}")
 
-# ── Mean confusion matrix (average of normalized CMs)
 if len(cms_normalized) > 0:
     mean_cm = np.mean(np.stack(cms_normalized, axis=0), axis=0)
     disp = ConfusionMatrixDisplay(mean_cm, display_labels=[str(i) for i in range(num_classes)])
