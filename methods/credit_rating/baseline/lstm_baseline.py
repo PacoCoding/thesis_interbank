@@ -263,7 +263,7 @@ def run_walkforward_lstm(start_quarter=None, end_quarter=None, show_cm=False,
                 f.write(report)
             print(f"  Wrote TXT: {txt_path}")
 
-            # Confusion matrix (normalized): title has NO run index
+            # Confusion matrix (normalized)
             if m.sum():
                 cm = confusion_matrix(y_true_full[m], preds[m],
                                       labels=np.arange(OUT_CLASSES), normalize='true')
@@ -312,10 +312,10 @@ def run_walkforward_lstm(start_quarter=None, end_quarter=None, show_cm=False,
             fig.savefig(mean_cm_path, dpi=220, bbox_inches='tight'); plt.close(fig)
             print(f"Saved mean CM: {mean_cm_path}")
         zip_path = shutil.make_archive(
-        base_name=out_dir,                       # -> "./results/2018Q2_LSTM"
+        base_name=out_dir,                      
         format='zip',
-        root_dir=os.path.dirname(out_dir),       # -> "./results"
-        base_dir=os.path.basename(out_dir)       # -> "2018Q2_LSTM"
+        root_dir=os.path.dirname(out_dir),      
+        base_dir=os.path.basename(out_dir)      
     )
     print(f"Zipped quarter folder: {zip_path}")
 
