@@ -179,7 +179,7 @@ def save_cm(y_true_np, y_pred_np, run_idx, year, quarter, model_name, out_dir):
     cm = confusion_matrix(y_true_np, y_pred_np, labels=classes, normalize='true')
     disp = ConfusionMatrixDisplay(cm, display_labels=[str(i) for i in classes])
     fig = disp.plot(include_values=True, cmap='Blues', values_format=".2f", colorbar=False).figure_
-    title = f"{year} Q{quarter} — {model_name} — Confusion Matrix)"
+    title = f"{year} Q{quarter} — {model_name} — Confusion Matrix"
     plt.title(title)
     fname = f"cm_{year}Q{quarter}_{_slug(model_name)}_run{run_idx}.png"
     out_path = os.path.join(out_dir, fname)
