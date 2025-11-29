@@ -21,7 +21,7 @@ class Model():
         loss = F.nll_loss(
             out[:batch.batch_size],
             batch.y[:batch.batch_size],
-            weight=self.class_weight  # <-- weighted loss here
+            weight=self.class_weight # Weight loss for dealing with imbalancess
         )
         loss.backward()
         self.optimizer.step()
@@ -47,8 +47,6 @@ class TGAR(torch.nn.Module):
         self.dropout = torch.nn.Dropout(p=droprate)
         self.hyper_k = hyper_k
 
-        # layers
-
         self.fcs = nn.ModuleList()
 
         # hyper-feature transition
@@ -69,13 +67,13 @@ class TGAR(torch.nn.Module):
 
         self.fcs.append(nn.Linear(self.hiddim * 3, 1))
 
+        # Important for mapping from the output of the first TGAR block and the second
         self.fcsK = nn.Linear(self.hiddim, self.num_feature)
 
         # fcnn layer 4 * hiddim    hiddim represents m in paper
         for i in range(4):
             self.fcs.append(nn.Linear(self.num_feature, self.hiddim))
-
-        # Gain todo: dim?
+         
         self.fcs.append(nn.Linear(self.hiddim * 3, 1))
 
         # todo: output layer
@@ -136,9 +134,7 @@ class TGAR(torch.nn.Module):
         # TransformerConv — pass edge_attr directly (shape [E_batch, 1])
         if edge_attr is not None:
             ea = edge_attr.to(device)
-            # (optional) sanity checks:
-            # assert edge_index.size(1) == ea.size(0)
-            # assert ea.dim() == 2 and ea.size(1) == 1
+           
         else:
             ea = None
 
