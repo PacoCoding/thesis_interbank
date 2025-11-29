@@ -48,18 +48,17 @@ def load_data(year,Q,attack_rate=0):
 
     with open(content1, "r") as f:
         lines = f.readlines()
-        # Extract all the variable names from the CVS file
+  
         header = lines[0].strip().split(',')
 
-        # For all the variables in the header it will remove blank spaces and finds equity and give it to the variable
         eq_idx = next(i for i, h in enumerate(header) if h.strip().lower() == "equity")
-        # Iterate over all the lines but the header
+     
         for j, node in enumerate(lines[1:]):
             node_info = node.strip('\n').split(',')
             node_id = node_info[0]
             index_dict[node_id] = len(index_dict)
 
-            # Because we use all 72 features, we remove the index, and the rank_next_quarter and the srisk variables
+            # Because we use all 72 features, we remove the index, and the rank_next_quarter and the srisk variables, to make the comparison fair
             if len(node_info) > 72:
                 feats = [float(i) for i in node_info[1:-3]]
                 # Provide rank_next_quarter as target variable
@@ -69,8 +68,7 @@ def load_data(year,Q,attack_rate=0):
                 label_str = node_info[-1]
             features.append(feats)
 
-            # dead if Equity < 0
-            # For every row (node\banks) it evaluates thw index whether it is smaller than 0 or not
+            # dead if Equity < 0 --> typically used to evaluate bancruptcy
             eq_val = float(node_info[eq_idx])
             dead_mask.append(eq_val < 0.0)
 
@@ -87,7 +85,6 @@ def load_data(year,Q,attack_rate=0):
         for node in lines[1:]:
             node_info = node.strip('\n').split(',')
 
-            # Offset in order to avoid using the same index for the 2 quarters. So the second quarter has the n1 = len(index_dict)
             node_id = str(int(node_info[0]) + n1) 
             index_dict[node_id] = len(index_dict)
 
@@ -124,7 +121,7 @@ def load_data(year,Q,attack_rate=0):
               else:
                   start, end = parts[0], parts[1]
                   w = 1.0
-              # To deal with the 2 graphs
+             
               sid = str(int(start) + offset)
               tid = str(int(end) + offset)
               if sid in index_dict and tid in index_dict:
@@ -155,8 +152,7 @@ def preprocess():
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)  
-    np.random.seed(seed)  # Numpy module.
-    # random.seed(seed)  # Python random module.
+    np.random.seed(seed) 
     torch.manual_seed(seed)
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
@@ -164,10 +160,8 @@ def preprocess():
 def zip_folder(src_dir: str, zip_path: str) -> str:
     os.makedirs(os.path.dirname(zip_path), exist_ok=True)
     base, _ = os.path.splitext(zip_path)
-    # creates base + '.zip'
     return shutil.make_archive(base_name=base, format='zip', root_dir=src_dir)
     
-# Trial for downloading directly from Colab
 def download_file(path: str):
     try:
         from google.colab import files
